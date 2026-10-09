@@ -1,1 +1,39 @@
+Matlab File
+%Component Selection and Spec Definition%
+
+%%%%%%%%%%%%%%%%%%%%
+%%% Design Specs %%%
+%%%%%%%%%%%%%%%%%%%%
+Rout = 50; %50 ohm output for 11.52W at 24V output, 
+Vin = 7.4; %7V < Vin < 9V, 7.4V nominal 
+Vout = 24; %12V < Vout < 24V, 12V nominal with 24V capabilities
+D = 1 - (Vin/Vout); %Duty Cycle (Nominal) 
+eff = 0.9; %Efficiency target the design 
+Pout = 11.52; %10W output maximum (and average)
+Pin = Pout / eff; %about 11.1W input average (if efficiency target can be met)
+Iout = Vout / Rout; %Output current
+disp(Iout);
+Iin = Pin / Vin; %Real input current, not the ideal relationship
+disp(Iin);
+f_sw = 250e3; %switching frequency 
+
+%%%%%%%%%%%%%%%%%
+%%% EMI SPECS %%%
+%%%%%%%%%%%%%%%%%
+%FCC Class A 'Compliant' for conducted EMI: 
+% 79dBuV (0.15MHz --> 0.5MHz)
+% 73dBuV (0.5 MHz --> 50Mhz)
+delta_V_out = 50e-3; %Output voltage ripple (50mV maximum) 
+Lisn_Impedence_dB = 20*log(50); %50 ohm impedance at high frequencies for EMI tests
+dBuV_Input = 60; %60 dBuV from 0.15 MHz --> 0.5 MHz
+dBuA = dBuV_Input - Lisn_Impedence_dB; 
+delta_I_in = 10^(dBuA/20)*1e-6; %Allowable ripple current at the output in the frequency band 0.15MHz --> 50MHz
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Component Selection %%
+%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% (...) %%
+
 
