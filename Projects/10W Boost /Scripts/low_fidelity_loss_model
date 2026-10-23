@@ -1,0 +1,209 @@
+import sympy as sp
+import numpy as np
+import matplotlib.pyplot as plt
+import control as ct
+
+"""
+##################
+#### Converter ###
+##################
+"""
+
+#Switching Frequency
+f_sw = 250000 #250kHz 
+#Input Voltage (Subject to some range)
+V_in = 5 #5V 
+#Output Voltage (Need to find a way to express Vout as a  )
+#Output Resistance
+R_out = 50 # 50 Ohm
+
+"""
+###################################
+#### Conduction Loss ONLY Model ###
+###################################
+"""
+
+#Inductor ESR
+R_L = 10e-3 #10 mOhms
+#MOSFET on resistance
+R_on = 100e-3 # 200 mOhms
+#Diode On Resistance
+R_D = 100e-3 #100 mOhms
+#Diode Forward Voltage Drop
+V_D = 0.5 #0.5V
+
+D = np.linspace(0.05, 0.85, 500)
+
+R_A = R_L + D*R_on + R_D*(1-D)
+
+V_out = (V_in - V_D*(1-D))*((R_out*(1-D))/(R_out*(1-D)**2 + R_A))
+
+eff = (V_out*(1-D))/(V_in)
+
+
+fig, ax = plt.subplots(1, 1, figsize = (10, 10))
+
+plt.title('Output Voltage vs Duty Cycle')
+ax.set_xlabel("Duty Cycle (D)")
+ax.set_ylabel("Output Voltage (Vout)")
+ax.plot(D, V_out)
+ax.grid(True)
+
+D_fixed = 0.81
+R_A_fixed = R_L + D_fixed*R_on + R_D*(1-D_fixed)
+V_out_fixed = (V_in - V_D*(1-D_fixed))*((R_out*(1-D_fixed))/(R_out*(1-D_fixed)**2 + R_A_fixed))
+
+print()
+print("V_out = ", np.round(V_out_fixed, 3), "with D = ", D_fixed)
+print()
+
+"""
+#################################
+### Switching Loss ONLY Model ###
+#################################
+"""
+### BROKEN PLS FIX ###
+
+#From the section above we found that for our output voltage to be our desired 24V we had D ~= 0.81 and with that we hovered at around 
+I_out = V_out_fixed / R_out
+
+#Diode Recovery Charge
+Q_r = 1e-6 #1uC 
+
+#Diode Reverse Recovery Time
+t_r = 200e-9 #200ns 
+
+#Total Gate Charge
+Q_gate = 20e-9 
+
+#Drain to Gate (Miller) Charge
+Q_gd = 10e-9 #10nC
+
+#Gate Resistance
+R_gate = 10 #10 Ohms
+
+#Modeling the pnp which pulls down the gate of the mosfet as a resistor with some resistance R_dwn 
+#Will need to look into this further when designing the gate driver
+R_dwn = 1 #1 Ohm 
+
+# Gate Drive Maximum sourcing current for 1st order approximation
+I_on = 5 #5A
+
+#Gate Drive Maximum Sinking current for 1st order approximation
+I_off = 2 #2A
+
+#Mosfet Threshold Voltage
+V_th = 5 #5V
+
+#Gate Drive Supply Voltage
+V_cc = 12 #12V
+
+"Approximation Order Chooser"
+order = 1 #1: 1st order, 2: Miller Approximation
+if(order == 1):
+    "1st Order Approximation"
+    #turn on time
+    t_on = Q_gate/I_on
+    #turn off time
+    t_off = Q_gate/I_off
+else:
+    "Miller Approximation"
+    #turn on time ~ miller time
+    t_on = Q_gd*R_gate / (V_cc - V_th)
+    t_off = Q_gd*(R_gate + R_dwn) / (V_th)
+
+
+rho_0 = t_on + t_off
+
+num = (Q_r*f_sw + I_out)
+den = (1-D) - (0.5*rho_0*f_sw) - (t_r*f_sw)
+
+#Fix below
+I_in = num / den
+
+#Power out and losses
+P_tr_loss = V_out * (I_in*rho_0*0.5*f_sw)
+P_diode_loss = Q_r*f_sw + I_in*t_r*f_sw
+P_out = V_out*I_out
+
+#Efficiency
+eff_switch_loss = P_out / (P_out + P_tr_loss + P_diode_loss)
+
+#Old Loss Graphs
+"""
+fig2, ax1 = plt.subplots(3, 1, figsize = (10, 10))
+
+plt.title('Transistor_loss vs Duty Cycle')
+ax1[0].set_xlabel("Duty Cycle (D)")
+ax1[0].set_ylabel("Transistor_loss (W)")
+ax1[0].plot(D, P_tr_loss)
+ax1[0].grid(True)
+
+plt.title('Diode_loss vs Duty Cycle')
+ax1[1].set_xlabel("Duty Cycle (D)")
+ax1[1].set_ylabel("Diode_loss (W)")
+ax1[1].plot(D, P_diode_loss)
+ax1[1].grid(True)
+
+plt.title('Efficiency vs Duty Cycle')
+ax1[2].set_xlabel("Duty Cycle (D)")
+ax1[2].set_ylabel("efficiency")
+ax1[2].plot(D, eff_switch_loss)
+ax1[2].grid(True)
+"""
+
+print()
+print()
+
+"""
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% LUMPED LOSS MODEL %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%
+"""
+
+P_ind_loss = R_L*I_in**2
+P_fet_cond = D*R_on*I_in**2
+P_diode_cond = R_D*(1-D)*I_in**2 + I_in*V_D*(1-D)
+
+net_efficiency = P_out / (P_out + P_tr_loss + P_diode_loss + P_ind_loss + P_fet_cond + P_diode_cond)
+
+fig3, ax2 = plt.subplots(3, 2, figsize = (10, 10))
+
+plt.title('Net Efficiency vs Duty Cycle')
+ax2[0,0].set_xlabel("Duty Cycle (D)")
+ax2[0,0].set_ylabel("Net Efficiency (W)")
+ax2[0,0].plot(D, net_efficiency)
+ax2[0,0].grid(True)
+
+plt.title('Transistor Switching Loss vs Duty Cycle')
+ax2[1,0].set_xlabel("Duty Cycle (D)")
+ax2[1,0].set_ylabel("Transistor Switch Loss (W)")
+ax2[1,0].plot(D, P_tr_loss)
+ax2[1,0].grid(True)
+
+plt.title('Diode Switching Loss vs Duty Cycle')
+ax2[2,0].set_xlabel("Duty Cycle (D)")
+ax2[2,0].set_ylabel("Diode Switching Loss (W)")
+ax2[2,0].plot(D, P_diode_loss)
+ax2[2,0].grid(True)
+
+plt.title('Inductor Loss vs Duty Cycle')
+ax2[0,1].set_xlabel("Duty Cycle (D)")
+ax2[0,1].set_ylabel("Inductor Loss (W)")
+ax2[0,1].plot(D, P_ind_loss)
+ax2[0,1].grid(True)
+
+plt.title('MOSFET Conduction Loss vs Duty Cycle')
+ax2[1,1].set_xlabel("Duty Cycle (D)")
+ax2[1,1].set_ylabel("R_ds Loss (W)")
+ax2[1,1].plot(D, P_fet_cond)
+ax2[1,1].grid(True)
+
+plt.title('Diode Conduction Loss vs Duty Cycle')
+ax2[2,1].set_xlabel("Duty Cycle (D)")
+ax2[2,1].set_ylabel("Drop Loss and R_on Loss (W)")
+ax2[2,1].plot(D, P_diode_cond)
+ax2[2,1].grid(True)
+
+
+plt.show()
